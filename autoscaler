@@ -1,0 +1,163 @@
+Configuring Horizontal Pod Autoscaler (HPA) and Vertical Pod Autoscaler (VPA) in Kubernetes to manage workloads dynamically based on demand involves several steps. Here’s a detailed guide:
+
+Horizontal Pod Autoscaler (HPA)
+
+The HPA automatically scales the number of pods in a deployment, replica set, or stateful set based on observed CPU/memory usage or custom metrics.
+
+Prerequisites
+
+Metrics Server: Ensure that the Metrics Server is installed in your cluster to provide resource metrics (CPU and memory usage).
+
+kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+
+Cluster Autoscaler: If using a cloud provider, configure the Cluster Autoscaler to add/remove nodes based on the needs of the HPA.
+
+Steps to Configure HPA
+
+Create a Deployment:
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: my-app
+  template:
+    metadata:
+      labels:
+        app: my-app
+    spec:
+      containers:
+      - name: my-app
+        image: my-app:latest
+        ports:
+        - containerPort: 80
+        resources:
+          requests:
+            cpu: "200m"
+            memory: "512Mi"
+          limits:
+            cpu: "500m"
+            memory: "1Gi"
+			
+Create HPA:
+
+kubectl autoscale deployment my-app --cpu-percent=50 --min=1 --max=10
+
+Alternatively, define it in YAML:
+
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: my-app-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: my-app
+  minReplicas: 1
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 50
+		
+Apply the YAML:
+
+kubectl apply -f my-app-hpa.yaml
+
+Vertical Pod Autoscaler (VPA)
+
+The VPA automatically adjusts the resource requests and limits of pods in a deployment based on actual usage.
+
+Prerequisites
+
+Install VPA:
+
+kubectl apply -f https://github.com/kubernetes/autoscaler/releases/latest/download/vertical-pod-autoscaler.yaml
+
+VPA Admission Controller: Ensure the VPA admission controller is enabled in the cluster.
+
+Steps to Configure VPA
+Create a VPA:
+
+
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: my-app-vpa
+spec:
+  targetRef:
+    apiVersion: "apps/v1"
+    kind:       Deployment
+    name:       my-app
+  updatePolicy:
+    updateMode: "Auto"
+Apply the YAML:
+
+
+kubectl apply -f my-app-vpa.yaml
+
+Configure VPA to Observe Resource Usage:
+
+Ensure that the VPA recommender component is running and observing resource usage. The VPA will recommend appropriate resource requests and limits based on historical usage.
+
+Review VPA Recommendations:
+
+You can view VPA recommendations by describing the VPA object:
+
+kubectl describe vpa my-app-vpa
+
+Combining HPA and VPA
+
+When using both HPA and VPA, it’s essential to ensure they work harmoniously. Typically, VPA is set to "Auto" mode to adjust resource requests and limits, while HPA adjusts the number of pods based on metrics.
+
+Create and Apply HPA and VPA Configurations:
+
+# HPA Configuration
+
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: my-app-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: my-app
+  minReplicas: 1
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 50
+
+# VPA Configuration
+
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: my-app-vpa
+spec:
+  targetRef:
+    apiVersion: "apps/v1"
+    kind:       Deployment
+    name:       my-app
+  updatePolicy:
+    updateMode: "Auto"
+	
+Apply Configurations:
+
+kubectl apply -f my-app-hpa.yaml
+kubectl apply -f my-app-vpa.yaml
+
+By properly configuring both HPA and VPA, Kubernetes can automatically manage your application’s scaling requirements, ensuring efficient use of resources and maintaining application performance under varying load conditions.
